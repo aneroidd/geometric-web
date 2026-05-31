@@ -1,5 +1,5 @@
 // Pastikan port-nya sesuai dengan port backend kamu (3001)
-const API_URL = 'http://localhost:3001/api';
+const API_URL = 'https://geometric-api-683589783585.asia-southeast2.run.app/api';
 
 export interface SuitabilityWeights {
   kepadatanPenduduk: number;

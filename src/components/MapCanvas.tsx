@@ -60,7 +60,7 @@ export default function MapCanvas({ kelurahanId, isHeatmapVisible, weights, acti
     });
 
     // Ambil data Batas Administrasi
-    fetch('http://localhost:3001/api/regions/map')
+    fetch('https://geometric-api-683589783585.asia-southeast2.run.app/api/regions/map')
       .then(res => res.json())
       .then(data => {
         if (!mapRef.current) return;
@@ -106,7 +106,7 @@ export default function MapCanvas({ kelurahanId, isHeatmapVisible, weights, acti
     if (!isHeatmapVisible || !kelurahanId) return;
 
     const q = new URLSearchParams(weights).toString();
-    fetch(`http://localhost:3001/api/regions/grid/${kelurahanId}?${q}`)
+    fetch(`https://geometric-api-683589783585.asia-southeast2.run.app/api/regions/grid/${kelurahanId}?${q}`)
       .then(res => res.json())
       .then(data => {
         if (!mapRef.current || !data.features || data.features.length === 0) return;

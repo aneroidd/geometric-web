@@ -49,7 +49,7 @@ function App() {
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/regions?level=city', { headers })
+    fetch('https://geometric-api-683589783585.asia-southeast2.run.app/api/regions?level=city', { headers })
       .then(res => res.json())
       .then(res => {
         const uniqueKabupaten = Array.from(new Map((res.data || []).map((item: any) => [item.name, item])).values());
@@ -63,7 +63,7 @@ function App() {
     setWilayah({ provinsi: 'DI Yogyakarta', kabupaten: target?.name || '', kecamatan: '', kelurahan: '' });
     setListKecamatan([]); setListKelurahan([]); setSelectedKelurahanId(''); setIsHeatmapVisible(false); setTopLocations([]);
     if (!kabId) return;
-    const res = await fetch(`http://localhost:3001/api/regions?level=kecamatan&parentId=${kabId}`, { headers });
+    const res = await fetch(`https://geometric-api-683589783585.asia-southeast2.run.app/api/regions?level=kecamatan&parentId=${kabId}`, { headers });
     const json = await res.json();
     setListKecamatan(Array.from(new Map((json.data || []).map((item: any) => [item.name, item])).values()));
   };
@@ -73,7 +73,7 @@ function App() {
     setWilayah(prev => ({ ...prev, kecamatan: target?.name || '', kelurahan: '' }));
     setListKelurahan([]); setSelectedKelurahanId(''); setIsHeatmapVisible(false); setTopLocations([]);
     if (!kecId) return;
-    const res = await fetch(`http://localhost:3001/api/regions?level=kelurahan&parentId=${kecId}`, { headers });
+    const res = await fetch(`https://geometric-api-683589783585.asia-southeast2.run.app/api/regions?level=kelurahan&parentId=${kecId}`, { headers });
     const json = await res.json();
     setListKelurahan(Array.from(new Map((json.data || []).map((item: any) => [item.name, item])).values()));
   };
@@ -87,7 +87,7 @@ function App() {
     setTopLocations([]);
 
     try {
-      const res = await fetch(`http://localhost:3001/api/regions/${kelId}`, { headers });
+      const res = await fetch(`https://geometric-api-683589783585.asia-southeast2.run.app/api/regions/${kelId}`, { headers });
       const json = await res.json();
       if (json.data?.lat && json.data?.lng) setCoords({ lat: Number(json.data.lat), lng: Number(json.data.lng) });
     } catch (err) {}
@@ -109,7 +109,7 @@ function App() {
       penduduk: debouncedWeights.penduduk.toString()
     }).toString();
 
-    fetch(`http://localhost:3001/api/regions/grid/${selectedKelurahanId}?${q}`, { headers })
+    fetch(`https://geometric-api-683589783585.asia-southeast2.run.app/api/regions/grid/${selectedKelurahanId}?${q}`, { headers })
       .then(res => res.json())
       .then(gridData => {
         const features = gridData.features || [];
