@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import MapCanvas from './components/MapCanvas';
-import LogoImg from './Logo.png'; // 🔥 KITA IMPORT LOGONYA LANGSUNG DI SINI
+import LogoImg from './logo.png'; // 🔥 KITA IMPORT LOGONYA LANGSUNG DI SINI
 
 const getScoreColor = (score: number) => {
   if (score >= 80) return '#10B981';
