@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import MapCanvas from './components/MapCanvas';
-import LogoImg from './logo.png'; // 🔥 KITA IMPORT LOGONYA LANGSUNG DI SINI
+import LogoImg from './logo.png'; 
 
 const getScoreColor = (score: number) => {
   if (score >= 80) return '#10B981';
@@ -11,19 +11,21 @@ const getScoreColor = (score: number) => {
 };
 
 function App() {
+  // 1. State untuk posisi Slider di layar (yang sedang digeser-geser)
   const [penduduk, setPenduduk] = useState(85);
   const [dayaBeli, setDayaBeli] = useState(70);
   const [akses, setAkses] = useState(75);
   const [kompetitor, setKompetitor] = useState(30);
 
-  const [debouncedWeights, setDebouncedWeights] = useState({ penduduk, dayaBeli, akses, kompetitor });
+  // 2. State untuk menyimpan Bobot yang SUDAH DIKLIK "HITUNG"
+  const [appliedWeights, setAppliedWeights] = useState({ penduduk, dayaBeli, akses, kompetitor });
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedWeights({ penduduk, dayaBeli, akses, kompetitor });
-    }, 400); 
-    return () => clearTimeout(timer);
-  }, [penduduk, dayaBeli, akses, kompetitor]);
+  // 3. Logika untuk mendeteksi apakah Slider berubah dari hasil yang sedang tampil di Peta
+  const isWeightsChanged = 
+    penduduk !== appliedWeights.penduduk || 
+    dayaBeli !== appliedWeights.dayaBeli || 
+    akses !== appliedWeights.akses || 
+    kompetitor !== appliedWeights.kompetitor;
 
   const [coords, setCoords] = useState({ lat: -7.7926, lng: 110.3658 });
   const [wilayah, setWilayah] = useState({
@@ -44,6 +46,16 @@ function App() {
   const [topLocations, setTopLocations] = useState<any[]>([]);
   const [activeRank, setActiveRank] = useState<number>(1);
   const [isLoading, setIsLoading] = useState(false);
+  
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true); 
+
+  // Memaksa Peta untuk Resize / Hilangkan area hitam saat menu ditutup
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 100); 
+    return () => clearTimeout(timer);
+  }, [isSidebarOpen]);
 
   const token = localStorage.getItem('token') || ''; 
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -102,11 +114,12 @@ function App() {
 
     setIsLoading(true);
 
+    // MENGGUNAKAN APPLIED WEIGHTS, BUKAN VALUE SLIDER SECARA LIVE
     const q = new URLSearchParams({
-      dayaBeli: debouncedWeights.dayaBeli.toString(), 
-      kompetitor: debouncedWeights.kompetitor.toString(), 
-      akses: debouncedWeights.akses.toString(), 
-      penduduk: debouncedWeights.penduduk.toString()
+      dayaBeli: appliedWeights.dayaBeli.toString(), 
+      kompetitor: appliedWeights.kompetitor.toString(), 
+      akses: appliedWeights.akses.toString(), 
+      penduduk: appliedWeights.penduduk.toString()
     }).toString();
 
     fetch(`https://geometric-api-683589783585.asia-southeast2.run.app/api/regions/grid/${selectedKelurahanId}?${q}`, { headers })
@@ -139,7 +152,7 @@ function App() {
       })
       .catch(err => console.error("Gagal kalkulasi statistik:", err))
       .finally(() => setIsLoading(false));
-  }, [isHeatmapVisible, selectedKelurahanId, debouncedWeights]);
+  }, [isHeatmapVisible, selectedKelurahanId, appliedWeights]);
 
   const bestScore = topLocations.length > 0 ? topLocations[0].score : 0;
   const bestScoreColor = getScoreColor(bestScore);
@@ -149,32 +162,90 @@ function App() {
       
       <style>{`
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .app-header {
+          min-height: 60px;
+          background-color: #111111;
+          border-bottom: 1px solid #222;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 24px;
+          z-index: 100;
+          flex-wrap: wrap;
+          gap: 16px;
+        }
+        .header-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .app-content {
+          flex: 1;
+          display: flex;
+          flex-direction: column; 
+          overflow-y: auto; 
+          overflow-x: hidden;
+        }
+        .left-panel {
+          width: 100%;
+          background-color: #111111;
+          padding: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+          border-bottom: 1px solid #222; 
+          order: 2; 
+        }
+        .map-panel {
+          width: 100%;
+          height: 55vh; 
+          min-height: 350px;
+          position: relative;
+          order: 1; 
+        }
+        .right-panel {
+          width: 100%;
+          background-color: #111111;
+          padding: 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+          order: 3; 
+        }
+
+        @media (min-width: 768px) {
+          .app-header { height: 60px; padding: 0 24px; flex-wrap: nowrap; }
+          .app-content { flex-direction: row; overflow: hidden; }
+          .left-panel { width: 240px; border-bottom: none; border-right: 1px solid #222; overflow-y: auto; order: 1; }
+          .map-panel { flex: 1; height: 100%; order: 2; }
+          .right-panel { width: 280px; border-left: 1px solid #222; overflow-y: auto; order: 3; }
+        }
+
+        @media (min-width: 1024px) {
+          .left-panel { width: 320px; }
+          .right-panel { width: 380px; }
+        }
       `}</style>
 
-      <div style={{ height: '60px', backgroundColor: '#111111', borderBottom: '1px solid #222', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', zIndex: 100 }}>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          
+      <div className="app-header">
+        <div className="header-left">
           <div style={{ display: 'flex', alignItems: 'center' }}>
-            {/* 🔥 MENGGUNAKAN VARIABEL LogoImg YANG SUDAH DI-IMPORT 🔥 */}
-            <img 
-              src={LogoImg} 
-              alt="GeoMetric Logo" 
-              style={{ height: '40px', width: 'auto', objectFit: 'contain' }} 
-            />
+            <img src={LogoImg} alt="GeoMetric Logo" style={{ height: '35px', width: 'auto', objectFit: 'contain' }} />
           </div>
 
-          <div style={{ width: '1px', height: '24px', backgroundColor: '#333', margin: '0 8px' }}></div>
+          <div style={{ width: '1px', height: '24px', backgroundColor: '#333', margin: '0 4px' }} className="hide-on-mobile"></div>
 
-          <select onChange={(e) => handleKabupatenChange(e.target.value)} style={{ backgroundColor: '#1A1A1A', color: '#FFF', border: '1px solid #333', padding: '6px 12px', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>
+          <select onChange={(e) => handleKabupatenChange(e.target.value)} style={{ backgroundColor: '#1A1A1A', color: '#FFF', border: '1px solid #333', padding: '6px 12px', borderRadius: '4px', fontSize: '13px', cursor: 'pointer', flex: '1 1 auto' }}>
             <option value="">-- Pilih Kab/Kota --</option>
             {listKabupaten.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
           </select>
-          <select onChange={(e) => handleKecamatanChange(e.target.value)} disabled={listKecamatan.length === 0} style={{ backgroundColor: '#1A1A1A', color: '#FFF', border: '1px solid #333', padding: '6px 12px', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>
+          <select onChange={(e) => handleKecamatanChange(e.target.value)} disabled={listKecamatan.length === 0} style={{ backgroundColor: '#1A1A1A', color: '#FFF', border: '1px solid #333', padding: '6px 12px', borderRadius: '4px', fontSize: '13px', cursor: 'pointer', flex: '1 1 auto' }}>
             <option value="">-- Pilih Kecamatan --</option>
             {listKecamatan.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
           </select>
-          <select onChange={(e) => handleKelurahanChange(e.target.value)} disabled={listKelurahan.length === 0} style={{ backgroundColor: '#1A1A1A', color: '#FFF', border: '1px solid #333', padding: '6px 12px', borderRadius: '4px', fontSize: '13px', cursor: 'pointer' }}>
+          <select onChange={(e) => handleKelurahanChange(e.target.value)} disabled={listKelurahan.length === 0} style={{ backgroundColor: '#1A1A1A', color: '#FFF', border: '1px solid #333', padding: '6px 12px', borderRadius: '4px', fontSize: '13px', cursor: 'pointer', flex: '1 1 auto' }}>
             <option value="">-- Pilih Kel/Desa --</option>
             {listKelurahan.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
           </select>
@@ -187,10 +258,9 @@ function App() {
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <div className="app-content">
         
-        <div style={{ width: '320px', backgroundColor: '#111111', padding: '20px', display: 'flex', flexDirection: 'column', gap: '24px', borderRight: '1px solid #222', overflowY: 'auto' }}>
-          
+        <div className="left-panel" style={{ display: isSidebarOpen ? 'flex' : 'none' }}>
           <div>
             <h4 style={{ fontSize: '11px', color: '#666', letterSpacing: '1px', margin: '0 0 12px 0' }}>MAP LAYERS</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px', color: '#CCC' }}>
@@ -215,34 +285,75 @@ function App() {
           </div>
 
           <button 
-            onClick={() => setIsHeatmapVisible(!isHeatmapVisible)} 
+            onClick={() => {
+              if (!isHeatmapVisible) {
+                // Kasus 1: Peta belum nyala, nyalakan & simpan bobot
+                setAppliedWeights({ penduduk, dayaBeli, akses, kompetitor });
+                setIsHeatmapVisible(true);
+              } else if (isWeightsChanged) {
+                // Kasus 2: Peta sudah nyala, dan slider diubah, Update bobotnya!
+                setAppliedWeights({ penduduk, dayaBeli, akses, kompetitor });
+              } else {
+                // Kasus 3: Peta nyala, slider tidak ada yang berubah, Matikan petanya!
+                setIsHeatmapVisible(false);
+              }
+            }}
             disabled={isLoading || !selectedKelurahanId}
             style={{ 
               width: '100%', padding: '12px', 
-              backgroundColor: isLoading || !selectedKelurahanId ? '#444' : '#D4AF37', 
+              backgroundColor: isLoading || !selectedKelurahanId ? '#444' : (isHeatmapVisible && !isWeightsChanged ? '#888' : '#D4AF37'), 
               border: 'none', borderRadius: '6px', 
-              color: isLoading || !selectedKelurahanId ? '#888' : '#000', 
+              color: '#000', 
               fontWeight: 'bold', cursor: isLoading || !selectedKelurahanId ? 'not-allowed' : 'pointer', 
               fontSize: '13px', marginTop: 'auto', transition: 'all 0.3s ease'
             }}
           >
-            {isLoading ? '⏳ MEMPROSES DATA...' : (isHeatmapVisible ? '🔥 MATIKAN ANALISIS SPASIAL' : 'HITUNG LOKASI POTENSIAL')}
+            {isLoading ? '⏳ MEMPROSES...' : 
+              (!isHeatmapVisible ? 'HITUNG LOKASI POTENSIAL' : 
+                (isWeightsChanged ? '🔄 PERBARUI ANALISIS' : '🔥 MATIKAN ANALISIS')
+              )
+            }
           </button>
         </div>
 
-        <div style={{ flex: 1, height: '100%', position: 'relative' }}>
+        <div className="map-panel">
+          
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            style={{
+              position: 'absolute',
+              top: '15px',
+              left: '15px',
+              zIndex: 1000,
+              backgroundColor: '#D4AF37',
+              color: '#000',
+              border: 'none',
+              padding: '8px 12px',
+              borderRadius: '4px',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.5)',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '12px'
+            }}
+          >
+            {isSidebarOpen ? '◀ TUTUP MENU' : '☰ BUKA MENU'}
+          </button>
+
           <MapCanvas 
             kelurahanId={selectedKelurahanId}
             isHeatmapVisible={isHeatmapVisible}
-            weights={debouncedWeights}
+            weights={appliedWeights} // PETA SEKARANG MEMBACA BOBOT YANG DI-APPLY
             activeRank={activeRank}
             onMapClick={(c) => setCoords(c)} 
             showBatasAdministrasi={showBatasAdministrasi}
           />
         </div>
 
-        <div style={{ width: '380px', backgroundColor: '#111111', padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px', borderLeft: '1px solid #222', overflowY: 'auto' }}>
-          
+        <div className="right-panel">
           <div>
             <span style={{ fontSize: '10px', color: '#D4AF37', fontWeight: 'bold', letterSpacing: '1px' }}>SELECTED LOCATION</span>
             <h3 style={{ margin: '4px 0 0 0', fontSize: '20px', fontWeight: 600, color: '#FFF' }}>
