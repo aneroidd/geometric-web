@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
+// 1. ScaleControl ditambahkan pada baris import di bawah ini
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, ScaleControl } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -57,6 +58,10 @@ export const MapViewer = () => {
             </Popup>
           </Marker>
         )}
+
+        {/* 2. Komponen ScaleControl dipasang di sini */}
+        <ScaleControl position="bottomright" metric={true} imperial={false} />
+        
       </MapContainer>
     </div>
   );

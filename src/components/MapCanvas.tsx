@@ -8,7 +8,8 @@ interface MapCanvasProps {
   weights?: any;
   activeRank?: number; 
   onMapClick?: (coords: { lat: number; lng: number }) => void; 
-  showBatasAdministrasi?: boolean; // 🔥 ERROR TERATASI: Kabel penerima sudah didaftarkan dengan nama yang benar
+  showBatasAdministrasi?: boolean; 
+  showHasilAnalisis?: boolean; // 🔥 PROPS BARU UNTUK TOGGLE GRID
 }
 
 const BASEMAPS = {
@@ -26,7 +27,15 @@ const getScoreColor = (score: number) => {
   return '#ef4444';
 };
 
-export default function MapCanvas({ kelurahanId, isHeatmapVisible, weights, activeRank, onMapClick, showBatasAdministrasi }: MapCanvasProps) {
+export default function MapCanvas({ 
+  kelurahanId, 
+  isHeatmapVisible, 
+  weights, 
+  activeRank, 
+  onMapClick, 
+  showBatasAdministrasi,
+  showHasilAnalisis = true // 🔥 Default nyala agar tidak error saat load awal
+}: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   
@@ -50,10 +59,17 @@ export default function MapCanvas({ kelurahanId, isHeatmapVisible, weights, acti
     if (!containerRef.current) return;
     const map = L.map(containerRef.current, { center: [-7.7956, 110.3695], zoom: 11, zoomControl: false, attributionControl: false });
     L.tileLayer(BASEMAPS['dark'].url).addTo(map);
+    
+    // Skala Peta di Pojok Kanan Bawah
+    L.control.scale({ position: 'bottomright', metric: true, imperial: false }).addTo(map);
+
     mapRef.current = map;
     
-    layersRef.current.heatmap.addTo(map);
-    layersRef.current.markers.addTo(map);
+    // Hanya pasang layer ke map saat inisialisasi jika showHasilAnalisis bernilai true
+    if (showHasilAnalisis) {
+      layersRef.current.heatmap.addTo(map);
+      layersRef.current.markers.addTo(map);
+    }
 
     map.on('click', (e: L.LeafletMouseEvent) => {
       onMapClickRef.current?.({ lat: e.latlng.lat, lng: e.latlng.lng });
@@ -89,14 +105,37 @@ export default function MapCanvas({ kelurahanId, isHeatmapVisible, weights, acti
     }
   }, [showBatasAdministrasi]);
 
-  // 3. Ganti Basemap
+  // 🔥 3. EFEK BARU: Toggle Layer Hasil Analisis (Grid & Marker) 🔥
+  useEffect(() => {
+    if (!mapRef.current) return;
+    
+    if (showHasilAnalisis) {
+      // Munculkan kembali jika belum ada di peta
+      if (!mapRef.current.hasLayer(layersRef.current.heatmap)) {
+        layersRef.current.heatmap.addTo(mapRef.current);
+      }
+      if (!mapRef.current.hasLayer(layersRef.current.markers)) {
+        layersRef.current.markers.addTo(mapRef.current);
+      }
+    } else {
+      // Sembunyikan dari peta (data tetap aman di memori, tidak terhapus)
+      if (mapRef.current.hasLayer(layersRef.current.heatmap)) {
+        mapRef.current.removeLayer(layersRef.current.heatmap);
+      }
+      if (mapRef.current.hasLayer(layersRef.current.markers)) {
+        mapRef.current.removeLayer(layersRef.current.markers);
+      }
+    }
+  }, [showHasilAnalisis]);
+
+  // 4. Ganti Basemap
   useEffect(() => {
     if (!mapRef.current) return;
     mapRef.current.eachLayer((layer) => { if (layer instanceof L.TileLayer) mapRef.current?.removeLayer(layer); });
     L.tileLayer(BASEMAPS[activeBasemap].url).addTo(mapRef.current);
   }, [activeBasemap]);
 
-  // 4. Heatmap & Popup Interaktif
+  // 5. Heatmap & Popup Interaktif
   useEffect(() => {
     if (!mapRef.current) return;
     layersRef.current.heatmap.clearLayers();
@@ -151,7 +190,7 @@ export default function MapCanvas({ kelurahanId, isHeatmapVisible, weights, acti
       });
   }, [kelurahanId, isHeatmapVisible, weightsString]);
 
-  // 5. Marker Ranking
+  // 6. Marker Ranking
   useEffect(() => {
     layersRef.current.markers.clearLayers();
 

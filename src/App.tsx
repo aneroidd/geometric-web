@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import MapCanvas from './components/MapCanvas';
 import LogoImg from './logo.png'; 
+import * as XLSX from 'xlsx';
 
 const getScoreColor = (score: number) => {
   if (score >= 80) return '#10B981';
@@ -11,16 +12,13 @@ const getScoreColor = (score: number) => {
 };
 
 function App() {
-  // 1. State untuk posisi Slider di layar (yang sedang digeser-geser)
   const [penduduk, setPenduduk] = useState(85);
   const [dayaBeli, setDayaBeli] = useState(70);
   const [akses, setAkses] = useState(75);
   const [kompetitor, setKompetitor] = useState(30);
 
-  // 2. State untuk menyimpan Bobot yang SUDAH DIKLIK "HITUNG"
   const [appliedWeights, setAppliedWeights] = useState({ penduduk, dayaBeli, akses, kompetitor });
 
-  // 3. Logika untuk mendeteksi apakah Slider berubah dari hasil yang sedang tampil di Peta
   const isWeightsChanged = 
     penduduk !== appliedWeights.penduduk || 
     dayaBeli !== appliedWeights.dayaBeli || 
@@ -28,15 +26,13 @@ function App() {
     kompetitor !== appliedWeights.kompetitor;
 
   const [coords, setCoords] = useState({ lat: -7.7926, lng: 110.3658 });
-  const [wilayah, setWilayah] = useState({
-    provinsi: 'DI Yogyakarta',
-    kabupaten: '',
-    kecamatan: '',
-    kelurahan: ''
-  });
+  const [wilayah, setWilayah] = useState({ provinsi: 'DI Yogyakarta', kabupaten: '', kecamatan: '', kelurahan: '' });
 
   const [selectedKelurahanId, setSelectedKelurahanId] = useState<string>('');
+  
+  // 🔥 MAP LAYER STATES 🔥
   const [showBatasAdministrasi, setShowBatasAdministrasi] = useState(true);
+  const [showHasilAnalisis, setShowHasilAnalisis] = useState(true); // State baru untuk Toggle Grid
 
   const [listKabupaten, setListKabupaten] = useState<any[]>([]);
   const [listKecamatan, setListKecamatan] = useState<any[]>([]);
@@ -46,10 +42,11 @@ function App() {
   const [topLocations, setTopLocations] = useState<any[]>([]);
   const [activeRank, setActiveRank] = useState<number>(1);
   const [isLoading, setIsLoading] = useState(false);
-  
   const [isSidebarOpen, setIsSidebarOpen] = useState(true); 
 
-  // Memaksa Peta untuk Resize / Hilangkan area hitam saat menu ditutup
+  const [aiAnalysis, setAiAnalysis] = useState<string>('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       window.dispatchEvent(new Event('resize'));
@@ -97,6 +94,7 @@ function App() {
     setSelectedKelurahanId(kelId); 
     setIsHeatmapVisible(false); 
     setTopLocations([]);
+    setShowHasilAnalisis(true); // Reset toggle jika ganti daerah
 
     try {
       const res = await fetch(`https://geometric-api-683589783585.asia-southeast2.run.app/api/regions/${kelId}`, { headers });
@@ -114,7 +112,6 @@ function App() {
 
     setIsLoading(true);
 
-    // MENGGUNAKAN APPLIED WEIGHTS, BUKAN VALUE SLIDER SECARA LIVE
     const q = new URLSearchParams({
       dayaBeli: appliedWeights.dayaBeli.toString(), 
       kompetitor: appliedWeights.kompetitor.toString(), 
@@ -149,10 +146,65 @@ function App() {
 
         setTopLocations(top5Data);
         setActiveRank(1); 
+        setShowHasilAnalisis(true); // Otomatis nyalakan toggle saat hitung selesai
       })
       .catch(err => console.error("Gagal kalkulasi statistik:", err))
       .finally(() => setIsLoading(false));
   }, [isHeatmapVisible, selectedKelurahanId, appliedWeights]);
+
+  useEffect(() => {
+    const fetchAiAnalysis = async (locData: any) => {
+      setIsAiLoading(true);
+      setAiAnalysis('');
+      try {
+        const res = await fetch(`https://geometric-api-683589783585.asia-southeast2.run.app/api/regions/ai-analysis`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            locationName: `Titik Grid #${locData.rank} (${wilayah.kelurahan || 'Area Terpilih'})`,
+            score: locData.score,
+            competitorCount: locData.jumlahKompetitor,
+            marketPotential: locData.jumlahPoi
+          })
+        });
+        const data = await res.json();
+        setAiAnalysis(data.analysis || 'Gagal menghasilkan respons AI.');
+      } catch (err) {
+        setAiAnalysis('Gagal terhubung ke Asisten AI. Periksa koneksi atau pastikan backend sudah ter-deploy.');
+      } finally {
+        setIsAiLoading(false);
+      }
+    };
+
+    if (topLocations.length > 0 && activeRank) {
+      const activeLoc = topLocations.find(l => l.rank === activeRank);
+      if (activeLoc) {
+        fetchAiAnalysis(activeLoc);
+      }
+    }
+  }, [activeRank, topLocations, wilayah.kelurahan]);
+
+  const exportToExcel = () => {
+    if (topLocations.length === 0) return;
+
+    const dataToExport = topLocations.map(loc => ({
+      "Peringkat": `#${loc.rank}`,
+      "Skor Kesesuaian (0-100)": Number(loc.score.toFixed(1)),
+      "Pusat Keramaian (%)": loc.potensi,
+      "Kepadatan Penduduk (%)": loc.kepadatan,
+      "Estimasi Populasi": loc.populasi,
+      "Persentase Usia Produktif": `${loc.usiaProduktif}%`,
+      "Kompetitor Terdekat": loc.jumlahKompetitor,
+      "Jumlah Titik POI": loc.jumlahPoi
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Ranking Lokasi");
+
+    const namaFile = `Analisis_Lokasi_${wilayah.kelurahan || 'GeoMetric'}.xlsx`;
+    XLSX.writeFile(workbook, namaFile);
+  };
 
   const bestScore = topLocations.length > 0 ? topLocations[0].score : 0;
   const bestScoreColor = getScoreColor(bestScore);
@@ -267,6 +319,17 @@ function App() {
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
                 <input type="checkbox" checked={showBatasAdministrasi} onChange={(e) => setShowBatasAdministrasi(e.target.checked)} style={{ accentColor: '#D4AF37' }} /> 👥 Batas Administrasi
               </label>
+              
+              {/* 🔥 KOTAK CENTANG BARU UNTUK GRID HASIL ANALISIS 🔥 */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: isHeatmapVisible ? 'pointer' : 'not-allowed', opacity: isHeatmapVisible ? 1 : 0.4 }}>
+                <input 
+                  type="checkbox" 
+                  checked={showHasilAnalisis} 
+                  onChange={(e) => setShowHasilAnalisis(e.target.checked)} 
+                  disabled={!isHeatmapVisible}
+                  style={{ accentColor: '#D4AF37' }} 
+                /> 📊 Hasil Analisis (Grid)
+              </label>
             </div>
           </div>
           
@@ -287,14 +350,11 @@ function App() {
           <button 
             onClick={() => {
               if (!isHeatmapVisible) {
-                // Kasus 1: Peta belum nyala, nyalakan & simpan bobot
                 setAppliedWeights({ penduduk, dayaBeli, akses, kompetitor });
                 setIsHeatmapVisible(true);
               } else if (isWeightsChanged) {
-                // Kasus 2: Peta sudah nyala, dan slider diubah, Update bobotnya!
                 setAppliedWeights({ penduduk, dayaBeli, akses, kompetitor });
               } else {
-                // Kasus 3: Peta nyala, slider tidak ada yang berubah, Matikan petanya!
                 setIsHeatmapVisible(false);
               }
             }}
@@ -346,10 +406,11 @@ function App() {
           <MapCanvas 
             kelurahanId={selectedKelurahanId}
             isHeatmapVisible={isHeatmapVisible}
-            weights={appliedWeights} // PETA SEKARANG MEMBACA BOBOT YANG DI-APPLY
+            weights={appliedWeights} 
             activeRank={activeRank}
             onMapClick={(c) => setCoords(c)} 
             showBatasAdministrasi={showBatasAdministrasi}
+            showHasilAnalisis={showHasilAnalisis} // 🔥 MENGIRIM PERINTAH TOGGLE KE KANVAS
           />
         </div>
 
@@ -373,7 +434,20 @@ function App() {
             </div>
           ) : topLocations.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <h4 style={{ fontSize: '11px', color: '#666', letterSpacing: '1px', margin: '0' }}>RANKING LOKASI POTENSIAL</h4>
+              
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h4 style={{ fontSize: '11px', color: '#666', letterSpacing: '1px', margin: '0' }}>RANKING LOKASI POTENSIAL</h4>
+                <button 
+                  onClick={exportToExcel}
+                  style={{
+                    backgroundColor: '#10B981', color: '#FFF', border: 'none', padding: '4px 8px', 
+                    borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                  }}
+                >
+                  <span>📊</span> UNDUH EXCEL
+                </button>
+              </div>
               
               {topLocations.map((loc) => {
                 const locScoreColor = getScoreColor(loc.score); 
@@ -432,6 +506,23 @@ function App() {
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', backgroundColor: 'rgba(16, 185, 129, 0.05)', padding: '8px 12px', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.1)', fontSize: '12px' }}>
                           <span style={{ color: '#CCC' }}>📍 Titik Keramaian</span><span style={{ fontWeight: 'bold', color: '#10B981' }}>{loc.jumlahPoi}</span>
+                        </div>
+
+                        <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'rgba(212, 175, 55, 0.05)', borderRadius: '6px', border: '1px solid rgba(212, 175, 55, 0.2)' }}>
+                          <h5 style={{ margin: '0 0 8px 0', color: '#D4AF37', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>🤖</span> Analisis AI Konsultan
+                          </h5>
+                          
+                          {isAiLoading ? (
+                            <div style={{ color: '#888', fontSize: '11px', fontStyle: 'italic', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                              <div style={{ width: '12px', height: '12px', border: '2px solid rgba(212, 175, 55, 0.2)', borderTopColor: '#D4AF37', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                              Menyusun laporan analitik...
+                            </div>
+                          ) : (
+                            <div style={{ color: '#E5E5E5', fontSize: '11.5px', lineHeight: '1.6', textAlign: 'justify' }}>
+                              {aiAnalysis}
+                            </div>
+                          )}
                         </div>
 
                       </div>
